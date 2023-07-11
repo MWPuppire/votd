@@ -1,7 +1,7 @@
 # VotD
 
 [![Crates.io](https://img.shields.io/crates/v/votd.svg)](https://crates.io/crates/votd)
-[![MIT License](https://img.shields.io/github/license/MWPuppire/votd.js.svg)](https://github.com/MWPuppire/votd/blob/master/LICENSE)
+[![MIT License](https://img.shields.io/github/license/MWPuppire/votd.svg)](https://github.com/MWPuppire/votd/blob/master/LICENSE)
 
 A command-line utility to look up the Bible verse-of-the-day. Use `votd` to get the current verse-of-the-day, or `votd --help` for command-line flags.
 
