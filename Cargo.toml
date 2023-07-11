@@ -1,0 +1,30 @@
+[package]
+name = "votd"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.56.0"
+description = "A command-line tool to lookup Bible verses"
+license = "MIT"
+readme = "README.md"
+authors = ["Ben Kelley"]
+repository = "https://github.com/MWPuppire/votd"
+homepage = "https://crates.io/crates/votd"
+keywords = ["bible", "cli"]
+categories = ["command-line-utilities"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+textwrap = { version = "0.16", features = [ "terminal_size" ] }
+serde = "1.0"
+serde_derive = "1.0"
+filetime = "0.2"
+reqwest = { version = "0.11", features = [ "json", "native-tls" ] }
+rmp-serde = "1.1"
+directories = "4.0"
+tokio = { version = "1", features = [ "full" ] }
+argh = "0.1"
+const_format = "0.2"
+
+[badges.maintenance]
+status = "as-is"
