@@ -60,9 +60,7 @@ async fn fetch_verse(verse: Option<&str>, timeout: Duration) -> reqwest::Result<
         &[("passage", if let Some(s) = verse { s } else { "votd" })],
     )
     .expect(URL_PARSE_ERROR);
-    let client = reqwest::Client::builder()
-        .timeout(timeout)
-        .build()?;
+    let client = reqwest::Client::builder().timeout(timeout).build()?;
     // The API returns status code 400 and a blank page when given an invalid
     // verse to look-up. To work around this, `error_for_status()` is used for
     // an early return instead of trying to parse an empty page as JSON.
@@ -118,7 +116,7 @@ fn unwrap_error<T>(res: reqwest::Result<T>) -> T {
 #[tokio::main]
 async fn main() {
     let args: VerseOpts = argh::from_env();
-    let verse_requested = if args.verse.len() > 0 {
+    let verse_requested = if !args.verse.is_empty() {
         Some(args.verse.join(" "))
     } else {
         None
