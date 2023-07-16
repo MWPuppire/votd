@@ -137,11 +137,7 @@ async fn main() {
             let metadata = cache_file.metadata().unwrap();
             let stamp = FileTime::from_last_modification_time(&metadata).seconds();
             let now = FileTime::now().seconds();
-            if now - stamp <= CACHE_EXPIRE_TIME {
-                Some(cache_file)
-            } else {
-                None
-            }
+            Some((cache_file, now - stamp <= CACHE_EXPIRE_TIME))
         } else {
             println!("Can't determine where to place a cache file. Skipping.");
             None
@@ -150,12 +146,13 @@ async fn main() {
         None
     };
 
-    let (verse, write_cache) = if let Some(cache_file) = cache.as_mut() {
+    let (verse, write_cache) = if let Some((cache_file, true)) = cache.as_mut() {
         let mut buf = Vec::new();
         cache_file.read_to_end(&mut buf).unwrap();
         let res = rmp_serde::from_slice(&buf);
+        cache_file.rewind().unwrap();
         if let Ok(cached) = res {
-            (cached, false)
+            (cached, true)
         } else {
             // for `cache` to be `Some`, `verse_requested` must be `None` and
             // `no_cache` must be `false`, so we can write to cache
@@ -189,7 +186,7 @@ async fn main() {
     }
 
     if write_cache && cache.is_some() {
-        let mut cache_file = cache.expect("Cache has to contain a value to reach this code");
+        let (mut cache_file, _) = cache.expect("Cache has to contain a value to reach this code");
         rmp_serde::encode::write(&mut cache_file, &verse).unwrap();
     }
 }
