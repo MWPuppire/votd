@@ -32,7 +32,11 @@ struct VerseOpts {
     #[argh(option, default = "2", short = 't')]
     timeout: u64,
 
-    #[argh(positional, greedy)]
+    /// display the program version and exit
+    #[argh(switch, short = 'v')]
+    version: bool,
+
+    #[argh(positional)]
     verse: Vec<String>,
 }
 
@@ -120,6 +124,11 @@ fn unwrap_error<T>(res: reqwest::Result<T>) -> T {
 #[tokio::main]
 async fn main() {
     let args: VerseOpts = argh::from_env();
+    if args.version {
+        println!("VotD v{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     let verse_requested = if !args.verse.is_empty() {
         Some(args.verse.join(" "))
     } else {
