@@ -16,7 +16,7 @@ I consider this a finished program; it serves my needs, and I don't care to work
 
 ## Performance
 
-It's written in Rust for performance; I include it in my `.zshrc` file, so I want it to be pretty fast. It caches the verse-of-the-day for 6 hours; this should mean it always returns a current one (most people need at least that much sleep between days), but the cache can be disabled with `-n` if it isn't desired.
+It's written in Rust for performance; I include it in my `.zshrc` file, so I want it to be pretty fast. It caches the verse-of-the-day for 6 hours; this should mean it always returns a current one (most people need at least that much sleep between days), but the cache can be manually refreshed with `-r`, or disabled altogether with `-n` if it isn't wanted.
 
 To avoid using too much filesystem space, it doesn't cache any verses other than the verse-of-the-day. If you want an app to look-up local copies of any verse, you'd be better off downloading an actual Bible app anyways.
 

@@ -16,6 +16,10 @@ struct VerseOpts {
     #[argh(switch, short = 'n')]
     no_cache: bool,
 
+    /// get the current VotD from the web (not cache), then write it to cache
+    #[argh(switch, short = 'r')]
+    refresh_cache: bool,
+
     /// only display the text of the verse(s), with no title before
     #[argh(switch, short = 'o')]
     only_verse: bool,
@@ -137,7 +141,7 @@ async fn main() {
             let metadata = cache_file.metadata().unwrap();
             let stamp = FileTime::from_last_modification_time(&metadata).seconds();
             let now = FileTime::now().seconds();
-            Some((cache_file, now - stamp <= CACHE_EXPIRE_TIME))
+            Some((cache_file, now - stamp <= CACHE_EXPIRE_TIME && !args.refresh_cache))
         } else {
             println!("Can't determine where to place a cache file. Skipping.");
             None
@@ -152,7 +156,7 @@ async fn main() {
         let res = rmp_serde::from_slice(&buf);
         cache_file.rewind().unwrap();
         if let Ok(cached) = res {
-            (cached, true)
+            (cached, false)
         } else {
             // for `cache` to be `Some`, `verse_requested` must be `None` and
             // `no_cache` must be `false`, so we can write to cache
