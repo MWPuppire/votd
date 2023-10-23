@@ -1,6 +1,6 @@
 [package]
 name = "votd"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 rust-version = "1.56.0"
 description = "A command-line tool to lookup Bible verses"
@@ -15,7 +15,7 @@ categories = ["command-line-utilities"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-textwrap = { version = "0.16", features = [ "terminal_size" ] }
+textwrap = "0.16"
 serde = "1.0"
 serde_derive = "1.0"
 filetime = "0.2"
@@ -25,6 +25,7 @@ directories = "4.0"
 tokio = { version = "1", features = [ "full" ] }
 argh = "0.1"
 const_format = "0.2"
+terminal_size = "0.3"
 
 [badges.maintenance]
 status = "as-is"

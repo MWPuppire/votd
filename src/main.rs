@@ -36,6 +36,10 @@ struct VerseOpts {
     #[argh(switch, short = 'v')]
     version: bool,
 
+    /// don't wrap the text of the verse(s) to the terminal width
+    #[argh(switch, short = 'w')]
+    no_wrap: bool,
+
     #[argh(positional)]
     verse: Vec<String>,
 }
@@ -192,10 +196,16 @@ async fn main() {
         }
         println!();
     }
-    let options = textwrap::Options::with_termwidth();
-    let wrapped = textwrap::wrap(&verse.text, &options);
-    for line in wrapped {
-        println!("{}", line);
+    let size = terminal_size::terminal_size().map(
+        |(terminal_size::Width(w), _)| w as usize
+    ).filter(|_| !args.no_wrap);
+    if let Some(size) = size {
+        let wrapped = textwrap::wrap(&verse.text, size);
+        for line in wrapped {
+            println!("{}", line);
+        }
+    } else {
+        println!("{}", &verse.text);
     }
 
     if write_cache && cache.is_some() {
