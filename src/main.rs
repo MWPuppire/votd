@@ -66,23 +66,20 @@ fn cache_file_path() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|dirs| dirs.cache_dir().join("votd-cli-cache.txt"))
 }
 
-async fn fetch_verse(verse: Option<&str>, timeout: Duration) -> reqwest::Result<Verse> {
-    let url = reqwest::Url::parse_with_params(
-        VERSE_URL,
-        &[("passage", if let Some(s) = verse { s } else { "votd" })],
-    )
-    .expect(URL_PARSE_ERROR);
-    let client = reqwest::Client::builder().timeout(timeout).build()?;
+fn fetch_verse(verse: Option<&str>, timeout: Duration) -> reqwest::Result<Verse> {
+    let url = reqwest::Url::parse_with_params(VERSE_URL, &[("passage", verse.unwrap_or("votd"))])
+        .expect(URL_PARSE_ERROR);
+    let client = reqwest::blocking::Client::builder()
+        .timeout(timeout)
+        .build()?;
     // The API returns status code 400 and a blank page when given an invalid
     // verse to look-up. To work around this, `error_for_status()` is used for
     // an early return instead of trying to parse an empty page as JSON.
     let verses = client
         .get(url)
-        .send()
-        .await?
+        .send()?
         .error_for_status()?
-        .json::<Vec<ApiVerse>>()
-        .await?;
+        .json::<Vec<ApiVerse>>()?;
     assert!(!verses.is_empty(), "No verses returned");
     let book = &verses[0].bookname;
     let chapter = verses[0]
@@ -125,8 +122,7 @@ fn unwrap_error<T>(res: reqwest::Result<T>) -> T {
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let args: VerseOpts = argh::from_env();
     if args.version {
         println!("VotD v{}", env!("CARGO_PKG_VERSION"));
@@ -147,6 +143,7 @@ async fn main() {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .append(false)
                 .open(path)
                 .unwrap();
@@ -154,7 +151,10 @@ async fn main() {
             let metadata = cache_file.metadata().unwrap();
             let stamp = FileTime::from_last_modification_time(&metadata).seconds();
             let now = FileTime::now().seconds();
-            Some((cache_file, now - stamp <= CACHE_EXPIRE_TIME && !args.refresh_cache))
+            Some((
+                cache_file,
+                now - stamp <= CACHE_EXPIRE_TIME && !args.refresh_cache,
+            ))
         } else {
             println!("Can't determine where to place a cache file. Skipping.");
             None
@@ -173,10 +173,10 @@ async fn main() {
         } else {
             // for `cache` to be `Some`, `verse_requested` must be `None` and
             // `no_cache` must be `false`, so we can write to cache
-            (unwrap_error(fetch_verse(None, timeout).await), true)
+            (unwrap_error(fetch_verse(None, timeout)), true)
         }
     } else {
-        let verse = unwrap_error(fetch_verse(verse_requested.as_deref(), timeout).await);
+        let verse = unwrap_error(fetch_verse(verse_requested.as_deref(), timeout));
         (verse, verse_requested.is_none() && !args.no_cache)
     };
 
@@ -196,9 +196,9 @@ async fn main() {
         }
         println!();
     }
-    let size = terminal_size::terminal_size().map(
-        |(terminal_size::Width(w), _)| w as usize
-    ).filter(|_| !args.no_wrap);
+    let size = terminal_size::terminal_size()
+        .map(|(terminal_size::Width(w), _)| w as usize)
+        .filter(|_| !args.no_wrap);
     if let Some(size) = size {
         let wrapped = textwrap::wrap(&verse.text, size);
         for line in wrapped {

@@ -1,6 +1,6 @@
 [package]
 name = "votd"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 rust-version = "1.56.0"
 description = "A command-line tool to lookup Bible verses"
@@ -15,17 +15,16 @@ categories = ["command-line-utilities"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-textwrap = "0.16"
-serde = "1.0"
-serde_derive = "1.0"
-filetime = "0.2"
-reqwest = { version = "0.11", features = [ "json", "native-tls" ] }
-rmp-serde = "1.1"
-directories = "4.0"
-tokio = { version = "1", features = [ "full" ] }
 argh = "0.1"
 const_format = "0.2"
+directories = "5.0"
+filetime = "0.2"
+reqwest = { version = "0.12", features = [ "blocking", "json", "native-tls" ] }
+rmp-serde = "1.1"
+serde = "1.0"
+serde_derive = "1.0"
 terminal_size = "0.3"
+textwrap = "0.16"
 
 [badges.maintenance]
 status = "as-is"
