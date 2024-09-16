@@ -77,6 +77,10 @@ fn fetch_verse(verse: Option<&str>, timeout: Duration) -> reqwest::Result<Verse>
     // an early return instead of trying to parse an empty page as JSON.
     let verses = client
         .get(url)
+        .header(
+            reqwest::header::HeaderName::from_static("user-agent"),
+            "Mozilla/5.0 Gecko/20100101 Firefox/130.0"
+        )
         .send()?
         .error_for_status()?
         .json::<Vec<ApiVerse>>()?;
