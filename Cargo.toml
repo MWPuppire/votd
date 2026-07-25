@@ -1,8 +1,8 @@
 [package]
 name = "votd"
 version = "1.0.6"
-edition = "2021"
-rust-version = "1.56.0"
+edition = "2024"
+rust-version = "1.85.0"
 description = "A command-line tool to lookup Bible verses"
 license = "MIT"
 readme = "README.md"
@@ -16,9 +16,9 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 argh = "0.1"
-const_format = "0.2"
 directories = "5.0"
 filetime = "0.2"
+itertools = "0.13.0"
 reqwest = { version = "0.12", features = [ "blocking", "json", "native-tls" ] }
 rmp-serde = "1.1"
 serde = "1.0"

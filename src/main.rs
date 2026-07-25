@@ -1,13 +1,13 @@
 use argh::FromArgs;
-use const_format::concatcp;
-use filetime::FileTime;
-use serde_derive::{Deserialize, Serialize};
-use std::io::{Read, Seek};
-use std::path::PathBuf;
 use std::time::Duration;
 
+mod api;
+use api::{Formatting, fetch_verse};
+mod cache;
+use cache::Cache;
+
 #[derive(FromArgs)]
-/// Retrieve the verse-of-the-day or a specified verse from NET Bible. Verses
+/// Retrieve the verse-of-the-day or a specified passage from NET Bible. Verses
 /// are case-insensitive, and some short names are acceptable (based on the NET
 /// Bible API, not the CLI). "random" and "votd" are accepted verses, and do
 /// what they sound like.
@@ -37,75 +37,25 @@ struct VerseOpts {
     version: bool,
 
     /// don't wrap the text of the verse(s) to the terminal width
+    //
+    // NOTE: on later design I'm not a huge fan of this, it sorta violates the
+    // UNIX philosophy, and is easy to implement via the POSIX tool `fold`.
+    //
+    // I'm not removing it now, to avoid a backwards-incompatible change, but
+    // I'm flagging this for potential removal later.
     #[argh(switch, short = 'w')]
     no_wrap: bool,
 
+    /// add a divider between separate passages
+    #[argh(switch, short = 'd')]
+    divider: bool,
+
+    /// specify the text formatting, out of `full`, `para`, `bold`, and `plain`
+    #[argh(option, default = "Formatting::Plain", short = 'f')]
+    formatting: Formatting,
+
     #[argh(positional)]
     verse: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Verse {
-    title: String,
-    text: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ApiVerse {
-    bookname: String,
-    chapter: String,
-    verse: String,
-    text: String,
-}
-
-const VERSE_URL: &str = "https://labs.bible.org/api/?type=json";
-const URL_PARSE_ERROR: &str = concatcp!(VERSE_URL, " should be a valid URL");
-const CACHE_EXPIRE_TIME: i64 = 21600; // 1/4 a day, in seconds
-
-fn cache_file_path() -> Option<PathBuf> {
-    directories::BaseDirs::new().map(|dirs| dirs.cache_dir().join("votd-cli-cache.txt"))
-}
-
-fn fetch_verse(verse: Option<&str>, timeout: Duration) -> reqwest::Result<Verse> {
-    let url = reqwest::Url::parse_with_params(VERSE_URL, &[("passage", verse.unwrap_or("votd"))])
-        .expect(URL_PARSE_ERROR);
-    let client = reqwest::blocking::Client::builder()
-        .timeout(timeout)
-        .build()?;
-    // The API returns status code 400 and a blank page when given an invalid
-    // verse to look-up. To work around this, `error_for_status()` is used for
-    // an early return instead of trying to parse an empty page as JSON.
-    let verses = client
-        .get(url)
-        .header(
-            reqwest::header::HeaderName::from_static("user-agent"),
-            "Mozilla/5.0 Gecko/20100101 Firefox/130.0"
-        )
-        .send()?
-        .error_for_status()?
-        .json::<Vec<ApiVerse>>()?;
-    assert!(!verses.is_empty(), "No verses returned");
-    let book = &verses[0].bookname;
-    let chapter = verses[0]
-        .chapter
-        .parse::<i32>()
-        .expect("Chapters should be valid integers");
-    let verse_start = verses[0]
-        .verse
-        .parse::<i32>()
-        .expect("Verses should be valid integers");
-    let verse_end = verses[verses.len() - 1]
-        .verse
-        .parse::<i32>()
-        .expect("Verses should be valid integers");
-    Ok(Verse {
-        title: if verse_start == verse_end {
-            format!("{} {}:{}", book, chapter, verse_start)
-        } else {
-            format!("{} {}:{}-{}", book, chapter, verse_start, verse_end)
-        },
-        text: verses.iter().fold("".to_owned(), |acc, e| acc + &e.text),
-    })
 }
 
 fn unwrap_error<T>(res: reqwest::Result<T>) -> T {
@@ -134,86 +84,75 @@ fn main() {
     }
 
     let verse_requested = if !args.verse.is_empty() {
-        Some(args.verse.join(" "))
+        args.verse.join(" ")
     } else {
-        None
+        String::from("votd")
     };
 
     let timeout = Duration::from_secs(args.timeout);
 
-    let mut cache = if verse_requested.is_none() && !args.no_cache {
-        if let Some(path) = cache_file_path() {
-            let mut cache_file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .append(false)
-                .open(path)
-                .unwrap();
-            cache_file.rewind().unwrap();
-            let metadata = cache_file.metadata().unwrap();
-            let stamp = FileTime::from_last_modification_time(&metadata).seconds();
-            let now = FileTime::now().seconds();
-            Some((
-                cache_file,
-                now - stamp <= CACHE_EXPIRE_TIME && !args.refresh_cache,
-            ))
-        } else {
-            println!("Can't determine where to place a cache file. Skipping.");
-            None
+    // only cache the verse of the day
+    let mut cache = if verse_requested == "votd" && !args.no_cache {
+        match Cache::new() {
+            Ok(c) => Some(c),
+            Err(err) => {
+                eprintln!("Error opening cache: {}", err);
+                None
+            }
         }
     } else {
         None
     };
 
-    let (verse, write_cache) = if let Some((cache_file, true)) = cache.as_mut() {
-        let mut buf = Vec::new();
-        cache_file.read_to_end(&mut buf).unwrap();
-        let res = rmp_serde::from_slice(&buf);
-        cache_file.rewind().unwrap();
-        if let Ok(cached) = res {
-            (cached, false)
-        } else {
-            // for `cache` to be `Some`, `verse_requested` must be `None` and
-            // `no_cache` must be `false`, so we can write to cache
-            (unwrap_error(fetch_verse(None, timeout)), true)
-        }
+    let verses = if let Some(cache) = cache.as_mut() && cache.is_live() && !args.refresh_cache {
+        cache.read().or_else(|err| {
+            eprintln!("Error reading cache: {}", err);
+            fetch_verse(&verse_requested, args.formatting, timeout)
+        })
     } else {
-        let verse = unwrap_error(fetch_verse(verse_requested.as_deref(), timeout));
-        (verse, verse_requested.is_none() && !args.no_cache)
+        fetch_verse(&verse_requested, args.formatting, timeout)
     };
+    let verses = unwrap_error(verses);
 
-    if !args.only_verse {
-        print!("{}", verse.title);
-        if args.show_translation {
-            print!(
-                " ({})",
-                if verse_requested.is_none() {
-                    "Verse of the Day - NET"
-                } else {
-                    "NET"
-                }
-            );
-        } else if verse_requested.is_none() {
-            print!(" (Verse of the Day)");
-        }
-        println!();
-    }
     let size = terminal_size::terminal_size()
         .map(|(terminal_size::Width(w), _)| w as usize)
         .filter(|_| !args.no_wrap);
-    if let Some(size) = size {
-        let wrapped = textwrap::wrap(&verse.text, size);
-        for line in wrapped {
-            println!("{}", line);
+
+    for v in &verses {
+        if v != verses.first().expect("`verses` is known to be non-empty") && args.divider {
+            println!();
+            println!("------------------------------");
+            println!();
         }
-    } else {
-        println!("{}", &verse.text);
+
+        if !args.only_verse {
+            print!("{}", v.title);
+            if args.show_translation {
+                print!(
+                    " ({})",
+                    if verse_requested == "votd" {
+                        "Verse of the Day - NET"
+                    } else {
+                        "NET"
+                    }
+                );
+            } else if verse_requested == "votd" {
+                print!(" (Verse of the Day)");
+            }
+            println!();
+        }
+
+        if let Some(size) = size {
+            let wrapped = textwrap::wrap(&v.text, size);
+            for line in wrapped {
+                println!("{}", line);
+            }
+        } else {
+            println!("{}", v.text);
+        }
     }
 
-    if write_cache && cache.is_some() {
-        let (mut cache_file, _) = cache.expect("Cache has to contain a value to reach this code");
-        rmp_serde::encode::write(&mut cache_file, &verse).unwrap();
+    if let Some(cache) = cache.as_mut() && !args.no_cache {
+        cache.write(&verses).unwrap();
     }
 }
